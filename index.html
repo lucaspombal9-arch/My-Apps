@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="MODO CAVERNA" />
+<link rel="manifest" href="./manifest.json" />
+<link rel="apple-touch-icon" href="./icon-192.png" />
+<meta name="theme-color" content="#070707" />
+<title>MODO CAVERNA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #070707; color: #e2e2e2; font-family: 'Oswald', sans-serif; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+  #app { max-width: 480px; margin: 0 auto; min-height: 100dvh; padding-bottom: env(safe-area-inset-bottom, 40px); }
+  button { font-family: 'Oswald', sans-serif; }
+  .mono { font-family: 'Share Tech Mono', monospace; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const BG="#070707", SRF="#101010", BRD="#1b1b1b", MUT="#444", TXT="#e2e2e2", DNG="#ef4444", SUC="#22c55e";
+
+const MANDATORY=[
+  {id:"exercicio",label:"EXERCÍCIO", icon:"⚡",xp:30,penalty:25,desc:"Treino físico, mobilidade ou cardio. Sem exceção."},
+  {id:"mente",    label:"MENTE",     icon:"◈", xp:25,penalty:25,desc:"Zero distrações. Sem dopamina fácil. Simplificar."},
+  {id:"intelecto",label:"INTELECTO", icon:"▲", xp:25,penalty:25,desc:"Aprender de forma ativa. Leitura, curso ou estudo."},
+];
+const OPTIONAL=[
+  {id:"futebol",    label:"FUTEBOL",    icon:"◉",xp:20,desc:"Fundamentos, físico, pontos fracos."},
+  {id:"sono",        label:"HIGIENE DO SONO", icon:"☽",xp:15,desc:"Dormir no mesmo horário. Sem ecrã antes de dormir."},
+  {id:"programacao",label:"PROGRAMAÇÃO",icon:"▶",xp:20,desc:"Estudo ativo de programação."},
+];
+const LEVELS=[
+  {name:"INICIANTE",      min:0,   color:"#6b7280",glow:"#6b728028"},
+  {name:"DISCIPLINADO",   min:1000,color:"#38bdf8",glow:"#38bdf828"},
+  {name:"ELITE",          min:3000,color:"#c084fc",glow:"#c084fc28"},
+  {name:"CAVERNA EXTREMO",min:6000,color:"#f59e0b",glow:"#f59e0b35"},
+];
+const CHALLENGES=[
+  {id:"c7s", name:"7 DIAS SEM REDES",    days:7, xp:150,desc:"Zero Instagram, TikTok, YouTube. 7 dias completos."},
+  {id:"csp", name:"SEMANA PERFEITA",     days:7, xp:100,desc:"7 dias consecutivos, todos os pilares obrigatórios."},
+  {id:"c30", name:"30 DIAS MODO CAVERNA",days:30,xp:500,desc:"30 dias sem falhar nenhum pilar obrigatório."},
+  {id:"cdt", name:"DETOX TOTAL 3 DIAS",  days:3, xp:75, desc:"3 dias sem entretenimento. Trabalho, treino, silêncio."},
+  {id:"ce",  name:"30 DIAS ACORDA CEDO", days:30,xp:200,desc:"Acordar antes das 7h por 30 dias seguidos."},
+];
+const RULES=[
+  {t:"MENOS É MAIS",            b:"Progresso vem da remoção, não do acúmulo. Elimina o que drena. Simplifica. O vazio cria espaço para o que importa."},
+  {t:"DISCIPLINA > MOTIVAÇÃO",  b:"Motivação é instável. Disciplina é o sistema. Não esperas sentir vontade. Executa. O sentimento vem depois da ação."},
+  {t:"CONFORTO NO DESCONFORTO", b:"A caverna é fria e silenciosa de propósito. É onde a maioria não aguenta ficar. Aqui é onde tu cresces."},
+  {t:"SEM DESCULPAS",           b:"Pilares não cumpridos = penalidade real. Não existe 'hoje foi difícil'. Existe fez ou não fez. O sistema não aceita explicações."},
+];
+
+const INIT={xp:0,streak:0,maxStreak:0,totalDays:0,failedDays:0,todayDate:null,todayChecked:{},active:[],done:[],mental:{foco:0,disciplina:0,controle:0},log:[]};
+
+const TODAY=()=>{
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+};
+const getLevel=(xp)=>[...LEVELS].reverse().find(l=>xp>=l.min)||LEVELS[0];
+const getNext=(xp)=>LEVELS.find(l=>l.min>xp)||null;
+
+// --- Storage (localStorage) ---
+function loadState(){
+  try{
+    const raw=localStorage.getItem("cv4");
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch{return null;}
+}
+function saveState(d){
+  try{ localStorage.setItem("cv4",JSON.stringify(d)); }catch{}
+}
+
+function rollDay(d){
+  const nd=JSON.parse(JSON.stringify(d));
+  const ok=MANDATORY.every(p=>nd.todayChecked[p.id]);
+  const prev=nd.todayDate;
+  if(ok){
+    nd.streak++;
+    nd.maxStreak=Math.max(nd.maxStreak,nd.streak);
+    nd.totalDays++;
+    nd.mental.disciplina=Math.min(100,nd.mental.disciplina+3);
+    nd.mental.foco=Math.min(100,nd.mental.foco+2);
+    nd.mental.controle=Math.min(100,nd.mental.controle+2);
+    if(nd.streak%7===0){nd.xp+=50;nd.log.push({date:prev,type:"b",text:`🔥 Streak de ${nd.streak} dias! +50 XP`});}
+    nd.log.push({date:prev,type:"w",text:`✓ Dia ${nd.totalDays} completo — streak ${nd.streak}d`});
+  }else{
+    const pen=MANDATORY.filter(p=>!nd.todayChecked[p.id]).reduce((s,p)=>s+p.penalty,0);
+    nd.xp=Math.max(0,nd.xp-pen);
+    nd.streak=0;
+    nd.failedDays++;
+    nd.mental.disciplina=Math.max(0,nd.mental.disciplina-5);
+    nd.mental.foco=Math.max(0,nd.mental.foco-3);
+    nd.mental.controle=Math.max(0,nd.mental.controle-3);
+    nd.log.push({date:prev,type:"f",text:`✗ Dia falhado. -${pen} XP. Streak zerado.`});
+  }
+  nd.log=nd.log.slice(-30);
+  nd.todayDate=TODAY();
+  nd.todayChecked={};
+  return nd;
+}
+
+// --- App State ---
+let s=null;
+let tab="hoje";
+let toastTimer=null;
+
+function initState(){
+  let d=loadState();
+  if(!d) d={...INIT};
+  d={...INIT,...d,mental:{...INIT.mental,...(d.mental||{})},active:d.active||[],done:d.done||[],log:d.log||[]};
+  const today=TODAY();
+  if(d.todayDate&&d.todayDate!==today) d=rollDay(d);
+  else if(!d.todayDate){d.todayDate=today;d.todayChecked={};}
+  s=d;
+}
+
+function save(nd){s=nd;saveState(nd);render();}
+
+function showToast(msg){
+  const el=document.getElementById("toast");
+  if(!el)return;
+  const lv=getLevel(s.xp);
+  el.textContent=msg;
+  el.style.display="block";
+  el.style.borderColor=lv.color;
+  el.style.color=lv.color;
+  el.style.boxShadow=`0 0 18px ${lv.glow}`;
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{el.style.display="none";},2600);
+}
+
+function toggle(pid,mand){
+  if(!s)return;
+  const p=[...MANDATORY,...OPTIONAL].find(x=>x.id===pid);
+  if(!p)return;
+  const done=!!s.todayChecked[p.id];
+  const ch={...s.todayChecked};
+  const m={...s.mental};
+  let dx;
+  if(!done){
+    ch[p.id]=true;dx=p.xp;
+    if(mand) m.disciplina=Math.min(100,m.disciplina+1);
+    if(p.id==="mente")    m.controle=Math.min(100,m.controle+1);
+    if(p.id==="intelecto")m.foco=Math.min(100,m.foco+1);
+    showToast(`+${p.xp} XP — ${p.label}`);
+  }else{
+    delete ch[p.id];dx=-p.xp;
+    if(mand) m.disciplina=Math.max(0,m.disciplina-1);
+    if(p.id==="mente")    m.controle=Math.max(0,m.controle-1);
+    if(p.id==="intelecto")m.foco=Math.max(0,m.foco-1);
+    showToast(`${p.label} desmarcado`);
+  }
+  save({...s,todayChecked:ch,xp:Math.max(0,s.xp+dx),mental:m});
+}
+
+function startCh(id){
+  if(!s)return;
+  const ch=CHALLENGES.find(c=>c.id===id);
+  if(!ch)return;
+  if(s.active.find(c=>c.id===id)){showToast("Já ativo.");return;}
+  if(s.done.includes(id)){showToast("Já completado!");return;}
+  save({...s,active:[...s.active,{...ch,start:TODAY(),progress:0}]});
+  showToast(`Iniciado: ${ch.name}`);
+}
+
+function advCh(id){
+  if(!s)return;
+  const upd=s.active.map(c=>c.id===id?{...c,progress:(c.progress||0)+1}:c);
+  const comp=upd.filter(c=>c.progress>=c.days);
+  const left=upd.filter(c=>c.progress<c.days);
+  let xg=0;comp.forEach(c=>{xg+=c.xp;showToast(`🏆 ${c.name} +${c.xp} XP!`);});
+  save({...s,xp:s.xp+xg,active:left,done:[...s.done,...comp.map(c=>c.id)]});
+}
+
+function resetGame(){
+  if(!confirm("Resetar tudo? Apaga todo o progresso."))return;
+  save({...INIT,todayDate:TODAY(),todayChecked:{}});
+  showToast("Resetado.");
+}
+
+// --- Render ---
+function h(tag,attrs={},children=[]){
+  const el=document.createElement(tag);
+  for(const[k,v] of Object.entries(attrs)){
+    if(k==="style"&&typeof v==="object") Object.assign(el.style,v);
+    else if(k.startsWith("on")&&typeof v==="function") el.addEventListener(k.slice(2).toLowerCase(),v);
+    else if(k==="className") el.className=v;
+    else el.setAttribute(k,v);
+  }
+  for(const c of children){
+    if(c==null||c===false) continue;
+    if(typeof c==="string"||typeof c==="number") el.appendChild(document.createTextNode(String(c)));
+    else el.appendChild(c);
+  }
+  return el;
+}
+
+function makePill(p,mand){
+  const lv=getLevel(s.xp);
+  const done=!!s.todayChecked[p.id];
+  const el=h("div",{
+    style:{display:"flex",alignItems:"center",gap:"14px",padding:"13px 15px",marginBottom:"3px",
+      background:done?`${lv.color}11`:SRF,
+      border:`1px solid ${done?lv.color+"55":BRD}`,
+      cursor:"pointer",userSelect:"none",transition:"all .18s",WebkitTapHighlightColor:"transparent"},
+    onclick:()=>toggle(p.id,mand)
+  },[
+    h("div",{style:{width:mand?"20px":"16px",height:mand?"20px":"16px",
+      border:`${mand?2:1}px solid ${done?lv.color:MUT}`,
+      display:"flex",alignItems:"center",justifyContent:"center",flexShrink:"0"}},[
+      done?h("div",{style:{width:mand?"10px":"8px",height:mand?"10px":"8px",background:mand?lv.color:SUC}},[]):null
+    ]),
+    h("div",{style:{flex:"1",minWidth:"0"}},[
+      h("div",{style:{fontWeight:"600",fontSize:"0.88rem",letterSpacing:"0.07em",color:done?(mand?lv.color:SUC):mand?TXT:"#999"}},[`${p.icon} ${p.label}`]),
+      h("div",{style:{fontSize:"0.6rem",color:"#666",marginTop:"2px"}},[p.desc])
+    ]),
+    h("div",{className:"mono",style:{fontSize:"0.78rem",color:done?(mand?lv.color:SUC):MUT,flexShrink:"0"}},[`+${p.xp}`])
+  ]);
+  return el;
+}
+
+function makeLabel(txt){
+  return h("div",{style:{fontSize:"0.52rem",letterSpacing:"0.3em",color:MUT,marginBottom:"10px"}},[txt]);
+}
+
+function renderHoje(lv,pen,allOk,todXP){
+  const div=h("div",{style:{padding:"18px 15px"}},[]);
+  div.appendChild(makeLabel(`PILARES OBRIGATÓRIOS — ${TODAY()}`));
+  MANDATORY.forEach(p=>div.appendChild(makePill(p,true)));
+  if(!allOk){
+    div.appendChild(h("div",{style:{padding:"8px 13px",background:"#130707",border:`1px solid ${DNG}28`,marginTop:"8px"}},[
+      h("div",{style:{fontSize:"0.58rem",color:DNG,letterSpacing:"0.1em"}},[`⚠ FALHAR HOJE = -${pen} XP + STREAK ZERADO`])
+    ]));
+  }
+  if(allOk){
+    div.appendChild(h("div",{style:{padding:"13px",background:`${lv.color}0d`,border:`1px solid ${lv.color}44`,textAlign:"center",marginTop:"4px"}},[
+      h("div",{style:{fontSize:"0.95rem",fontWeight:"700",color:lv.color,letterSpacing:"0.18em"}},["PILARES CUMPRIDOS ✓"]),
+      h("div",{style:{fontSize:"0.58rem",color:MUT,marginTop:"5px"}},["STREAK PRESERVADO. COMPLETA AS MISSÕES OPCIONAIS."])
+    ]));
+  }
+  div.appendChild(h("div",{style:{height:"20px"}},[]));
+  div.appendChild(makeLabel("MISSÕES OPCIONAIS"));
+  OPTIONAL.forEach(p=>div.appendChild(makePill(p,false)));
+  div.appendChild(h("div",{style:{marginTop:"18px",padding:"13px 15px",background:SRF,border:`1px solid ${BRD}`,display:"flex",justifyContent:"space-between"}},[
+    h("div",{},[
+      h("div",{style:{fontSize:"0.5rem",color:MUT,letterSpacing:"0.18em",marginBottom:"4px"}},["XP HOJE"]),
+      h("div",{className:"mono",style:{fontSize:"1.3rem",color:todXP>0?lv.color:MUT}},[String(todXP)+" XP"])
+    ]),
+    h("div",{style:{textAlign:"right"}},[
+      h("div",{style:{fontSize:"0.5rem",color:MUT,letterSpacing:"0.18em",marginBottom:"4px"}},["STREAK"]),
+      h("div",{className:"mono",style:{fontSize:"1.3rem",color:s.streak>0?"#f59e0b":MUT}},[s.streak+" dias"])
+    ])
+  ]));
+  return div;
+}
+
+function renderEvolucao(lv){
+  const div=h("div",{style:{padding:"18px 15px"}},[]);
+  div.appendChild(makeLabel("EVOLUÇÃO MENTAL"));
+  [{k:"disciplina",l:"DISCIPLINA",c:lv.color},{k:"foco",l:"FOCO",c:"#38bdf8"},{k:"controle",l:"CONTROLE EMOCIONAL",c:"#c084fc"}].forEach(m=>{
+    div.appendChild(h("div",{style:{marginBottom:"17px"}},[
+      h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:"5px"}},[
+        h("span",{style:{fontSize:"0.7rem",letterSpacing:"0.1em"}},[m.l]),
+        h("span",{className:"mono",style:{fontSize:"0.7rem",color:m.c}},[`${s.mental[m.k]}/100`])
+      ]),
+      h("div",{style:{height:"3px",background:BRD}},[
+        h("div",{style:{height:"100%",width:`${s.mental[m.k]}%`,background:m.c,transition:"width .6s",boxShadow:`0 0 6px ${m.c}88`}},[])
+      ])
+    ]));
+  });
+  const grid=h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px",marginTop:"22px",marginBottom:"20px"}},[]);
+  [{l:"XP TOTAL",v:s.xp.toLocaleString()+" XP"},{l:"MAIOR STREAK",v:s.maxStreak+" dias"},{l:"DIAS PERFEITOS",v:String(s.totalDays)},{l:"DIAS FALHADOS",v:String(s.failedDays)}].forEach(x=>{
+    grid.appendChild(h("div",{style:{background:SRF,padding:"13px",border:`1px solid ${BRD}`}},[
+      h("div",{className:"mono",style:{fontSize:"1.05rem"}},[x.v]),
+      h("div",{style:{fontSize:"0.52rem",color:MUT,letterSpacing:"0.12em",marginTop:"5px"}},[x.l])
+    ]));
+  });
+  div.appendChild(grid);
+  div.appendChild(makeLabel("LOG RECENTE"));
+  if(s.log.length===0){
+    div.appendChild(h("div",{style:{fontSize:"0.7rem",color:MUT}},["Nenhuma entrada. Começa hoje."]));
+  }else{
+    [...s.log].reverse().slice(0,12).forEach(e=>{
+      div.appendChild(h("div",{style:{padding:"8px 11px",marginBottom:"2px",background:SRF,borderLeft:`3px solid ${e.type==="f"?DNG:e.type==="b"?"#f59e0b":SUC}`}},[
+        h("div",{className:"mono",style:{fontSize:"0.62rem",color:e.type==="f"?DNG:e.type==="b"?"#f59e0b":SUC}},[e.text]),
+        h("div",{style:{fontSize:"0.48rem",color:MUT,marginTop:"2px"}},[e.date||""])
+      ]));
+    });
+  }
+  return div;
+}
+
+function renderDesafios(lv){
+  const div=h("div",{style:{padding:"18px 15px"}},[]);
+  if(s.active.length>0){
+    div.appendChild(makeLabel("EM PROGRESSO"));
+    s.active.forEach(c=>{
+      const p2=Math.round(((c.progress||0)/c.days)*100);
+      div.appendChild(h("div",{style:{padding:"13px",marginBottom:"8px",background:SRF,border:`1px solid ${lv.color}44`}},[
+        h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:"5px"}},[
+          h("div",{style:{fontSize:"0.78rem",fontWeight:"600",color:lv.color,letterSpacing:"0.07em"}},[c.name]),
+          h("div",{className:"mono",style:{fontSize:"0.72rem",color:MUT}},[ `${c.progress||0}/${c.days}d`])
+        ]),
+        h("div",{style:{height:"2px",background:BRD,marginBottom:"10px"}},[
+          h("div",{style:{height:"100%",width:`${p2}%`,background:lv.color}},[])
+        ]),
+        h("button",{style:{width:"100%",padding:"8px",background:"transparent",border:`1px solid ${lv.color}`,color:lv.color,fontSize:"0.62rem",letterSpacing:"0.12em",cursor:"pointer"},onclick:()=>advCh(c.id)},["+ 1 DIA CONCLUÍDO"])
+      ]));
+    });
+    div.appendChild(h("div",{style:{height:"14px"}},[]));
+  }
+  div.appendChild(makeLabel("DISPONÍVEIS"));
+  CHALLENGES.forEach(ch=>{
+    const ac=!!s.active.find(c=>c.id===ch.id);
+    const dn=s.done.includes(ch.id);
+    div.appendChild(h("div",{style:{padding:"13px 15px",marginBottom:"5px",background:dn?"#0a120a":SRF,border:`1px solid ${dn?SUC+"33":ac?lv.color+"33":BRD}`,opacity:dn?"0.75":"1"}},[
+      h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:"5px"}},[
+        h("div",{style:{fontSize:"0.8rem",fontWeight:"600",letterSpacing:"0.07em",color:dn?SUC:ac?lv.color:TXT}},[ (dn?"✓ ":"")+ch.name]),
+        h("div",{className:"mono",style:{fontSize:"0.75rem",color:lv.color,marginLeft:"8px",flexShrink:"0"}},[`+${ch.xp} XP`])
+      ]),
+      h("div",{style:{fontSize:"0.6rem",color:"#666",marginBottom:"9px",lineHeight:"1.5"}},[ch.desc]),
+      h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},[
+        h("span",{style:{fontSize:"0.52rem",color:MUT}},[ch.days+" DIAS"]),
+        !dn&&!ac?h("button",{style:{padding:"5px 13px",background:"transparent",border:`1px solid ${lv.color}`,color:lv.color,fontSize:"0.6rem",letterSpacing:"0.12em",cursor:"pointer"},onclick:()=>startCh(ch.id)},["INICIAR"]):null,
+        ac?h("span",{style:{fontSize:"0.55rem",color:lv.color}},["ATIVO"]):null,
+        dn?h("span",{style:{fontSize:"0.55rem",color:SUC}},["CONCLUÍDO"]):null
+      ])
+    ]));
+  });
+  return div;
+}
+
+function renderRegras(lv){
+  const div=h("div",{style:{padding:"18px 15px"}},[]);
+  div.appendChild(makeLabel("FILOSOFIA"));
+  RULES.forEach(r=>{
+    div.appendChild(h("div",{style:{marginBottom:"9px",padding:"13px 15px",background:SRF,borderLeft:`3px solid ${lv.color}`}},[
+      h("div",{style:{fontSize:"0.75rem",fontWeight:"700",color:lv.color,letterSpacing:"0.1em",marginBottom:"6px"}},[r.t]),
+      h("div",{style:{fontSize:"0.68rem",color:"#aaa",lineHeight:"1.65"}},[r.b])
+    ]));
+  });
+  div.appendChild(h("div",{style:{height:"16px"}},[]));
+  div.appendChild(makeLabel("SISTEMA DE XP"));
+  const xpBox=h("div",{style:{padding:"13px",background:SRF,border:`1px solid ${BRD}`,marginBottom:"14px"}},[]);
+  [...MANDATORY,...OPTIONAL].forEach(p=>{
+    xpBox.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${BRD}`}},[
+      h("span",{style:{fontSize:"0.68rem"}},[`${p.icon} ${p.label}`]),
+      h("span",{className:"mono",style:{fontSize:"0.68rem",color:SUC}},[`+${p.xp} XP`])
+    ]));
+  });
+  MANDATORY.forEach(p=>{
+    xpBox.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:`1px solid ${BRD}`}},[
+      h("span",{style:{fontSize:"0.68rem",color:MUT}},[`⚠ Falhar ${p.label}`]),
+      h("span",{className:"mono",style:{fontSize:"0.68rem",color:DNG}},[`-${p.penalty} XP`])
+    ]));
+  });
+  xpBox.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",padding:"5px 0"}},[
+    h("span",{style:{fontSize:"0.68rem",color:MUT}},["🔥 Streak a cada 7 dias"]),
+    h("span",{className:"mono",style:{fontSize:"0.68rem",color:"#f59e0b"}},["+50 XP"])
+  ]));
+  div.appendChild(xpBox);
+  div.appendChild(makeLabel("NÍVEIS"));
+  LEVELS.forEach(l=>{
+    div.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 13px",marginBottom:"3px",background:SRF,border:`1px solid ${s.xp>=l.min?l.color+"44":BRD}`}},[
+      h("div",{style:{fontSize:"0.75rem",fontWeight:"600",color:s.xp>=l.min?l.color:MUT,letterSpacing:"0.08em"}},[l.name]),
+      h("div",{className:"mono",style:{fontSize:"0.62rem",color:MUT}},[l.min.toLocaleString()+" XP"])
+    ]));
+  });
+  div.appendChild(h("div",{style:{marginTop:"26px",paddingTop:"16px",borderTop:`1px solid ${BRD}`}},[
+    h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${DNG}2a`,color:`${DNG}66`,fontSize:"0.6rem",letterSpacing:"0.18em",cursor:"pointer"},onclick:resetGame},["RESETAR JOGO"])
+  ]));
+  return div;
+}
+
+function render(){
+  if(!s){
+    document.getElementById("app").innerHTML=`<div style="background:${BG};height:100dvh;display:flex;align-items:center;justify-content:center;"><span style="font-family:Oswald,sans-serif;color:#f59e0b;letter-spacing:0.35em">CARREGANDO...</span></div>`;
+    return;
+  }
+  const lv=getLevel(s.xp);
+  const nx=getNext(s.xp);
+  const pct=nx?Math.min(100,Math.round(((s.xp-lv.min)/(nx.min-lv.min))*100)):100;
+  const todXP=[...MANDATORY,...OPTIONAL].filter(p=>s.todayChecked[p.id]).reduce((a,p)=>a+p.xp,0);
+  const mDone=MANDATORY.filter(p=>s.todayChecked[p.id]).length;
+  const allOk=mDone===3;
+  const pen=MANDATORY.filter(p=>!s.todayChecked[p.id]).reduce((a,p)=>a+p.penalty,0);
+
+  const root=h("div",{style:{background:BG,minHeight:"100dvh",fontFamily:"Oswald,sans-serif",color:TXT}},[]);
+
+  // Toast
+  const toastEl=h("div",{id:"toast",style:{display:"none",position:"fixed",top:"14px",left:"50%",transform:"translateX(-50%)",background:"#0d0d0d",padding:"8px 22px",zIndex:"999",fontSize:"0.78rem",letterSpacing:"0.1em",whiteSpace:"nowrap",fontFamily:"Share Tech Mono,monospace"}},["..."]);
+  root.appendChild(toastEl);
+
+  // Header
+  const header=h("div",{style:{padding:"20px 18px 0",borderBottom:`1px solid ${BRD}`}},[]);
+  header.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px"}},[
+    h("div",{},[
+      h("div",{style:{fontSize:"0.5rem",letterSpacing:"0.35em",color:MUT,marginBottom:"2px"}},["RPG DE DISCIPLINA"]),
+      h("div",{style:{fontSize:"2rem",fontWeight:"700",lineHeight:"1",letterSpacing:"0.04em"}},["MODO"]),
+      h("div",{style:{fontSize:"2rem",fontWeight:"700",lineHeight:"1",color:lv.color,textShadow:`0 0 28px ${lv.glow}`}},["CAVERNA"])
+    ]),
+    h("div",{style:{textAlign:"right"}},[
+      h("div",{style:{fontSize:"0.5rem",color:MUT,letterSpacing:"0.2em",marginBottom:"3px"}},["NÍVEL"]),
+      h("div",{style:{fontSize:"0.72rem",fontWeight:"600",color:lv.color,letterSpacing:"0.1em"}},[lv.name]),
+      h("div",{className:"mono",style:{fontSize:"1.45rem",marginTop:"4px",lineHeight:"1"}},[
+        s.xp.toLocaleString(),
+        h("span",{style:{fontSize:"0.65rem",color:MUT,marginLeft:"2px"}},["XP"])
+      ])
+    ])
+  ]));
+  // XP bar
+  header.appendChild(h("div",{style:{marginBottom:"14px"}},[
+    h("div",{style:{display:"flex",justifyContent:"space-between",fontSize:"0.52rem",color:MUT,letterSpacing:"0.12em",marginBottom:"5px"}},[
+      h("span",{},["PROGRESSO"]),
+      h("span",{},[nx?`${pct}% → ${nx.name}`:"NÍVEL MÁXIMO"])
+    ]),
+    h("div",{style:{height:"2px",background:BRD}},[
+      h("div",{style:{height:"100%",width:`${pct}%`,background:lv.color,transition:"width .6s",boxShadow:`0 0 7px ${lv.color}`}},[])
+    ])
+  ]));
+  // Stats grid
+  const statsGrid=h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"1px",background:BRD,marginBottom:"1px"}},[]);
+  [{l:"STREAK",v:`${s.streak}🔥`,c:s.streak>0?"#f59e0b":MUT},{l:"DIAS OK",v:String(s.totalDays),c:TXT},{l:"HOJE",v:`+${todXP} XP`,c:todXP>0?SUC:MUT},{l:"PILARES",v:`${mDone}/3`,c:allOk?SUC:mDone>0?"#f59e0b":DNG}].forEach(x=>{
+    statsGrid.appendChild(h("div",{style:{background:SRF,padding:"10px 5px",textAlign:"center"}},[
+      h("div",{className:"mono",style:{fontSize:"0.88rem",color:x.c,fontWeight:"600"}},[x.v]),
+      h("div",{style:{fontSize:"0.48rem",color:MUT,letterSpacing:"0.12em",marginTop:"3px"}},[x.l])
+    ]));
+  });
+  header.appendChild(statsGrid);
+  // Tabs
+  const tabsGrid=h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"1px",background:BRD}},[]);
+  ["hoje","evolução","desafios","regras"].forEach(t=>{
+    tabsGrid.appendChild(h("button",{
+      style:{background:tab===t?lv.color:SRF,color:tab===t?"#000":MUT,border:"none",padding:"11px 3px",fontWeight:"600",fontSize:"0.58rem",letterSpacing:"0.12em",cursor:"pointer",textTransform:"uppercase",transition:"all .15s"},
+      onclick:()=>{tab=t;render();}
+    },[t.toUpperCase()]));
+  });
+  header.appendChild(tabsGrid);
+  root.appendChild(header);
+
+  // Tab content
+  if(tab==="hoje")     root.appendChild(renderHoje(lv,pen,allOk,todXP));
+  if(tab==="evolução") root.appendChild(renderEvolucao(lv));
+  if(tab==="desafios") root.appendChild(renderDesafios(lv));
+  if(tab==="regras")   root.appendChild(renderRegras(lv));
+
+  const app=document.getElementById("app");
+  app.innerHTML="";
+  app.appendChild(root);
+}
+
+// --- Boot ---
+initState();
+render();
+</script>
+
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./sw.js')
+      .then(r=>console.log('SW registado:',r.scope))
+      .catch(e=>console.warn('SW falhou:',e));
+  });
+}
+</script>
+</body>
+</html>
