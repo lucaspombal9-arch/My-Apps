@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>LP PERFORMANCE — Plano Alimentar</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;900&family=Barlow:wght@400;600&display=swap');
+  :root { --bg: #080808; --text: #e8e8e8; --accent: #22c55e; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Barlow', sans-serif; overflow-x: hidden; }
+  .capa { width: 100%; height: 60vh; position: relative; border-bottom: 4px solid var(--accent); }
+  .capa img { width: 100%; height: 100%; object-fit: cover; }
+  .capa-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 30px; background: linear-gradient(transparent, rgba(0,0,0,1)); }
+  h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 2.2rem; text-transform: uppercase; color: #fff; letter-spacing: 1px; }
+  .content { padding: 30px; }
+  p { font-size: 1.1rem; line-height: 1.6; color: #b3b3b3; margin-bottom: 20px; }
+  .status { color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem; }
+</style>
+<link rel="manifest" href="manifest.json">
+</head>
+<body>
+<div class="capa">
+  <img src="../image_1.png" alt="Plano Alimentar Saudável">
+  <div class="capa-overlay">
+    <div class="status">🍽️ PERFORMANCE & DIETA</div>
+    <h1>O Teu Plano Semanal</h1>
+  </div>
+</div>
+<div class="content">
+  <p>Aqui estará o teu diário e plano de alimentação para otimizares o teu treino como Lateral Direito.</p>
+  <p style="font-size: 0.9rem; color: #555;">(Criei este espaço organizado para ti. Agora só precisas de colar as tuas tabelas aqui).</p>
+</div>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
+</body>
+</html>
